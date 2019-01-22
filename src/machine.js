@@ -7,29 +7,44 @@ import { Machine, actions } from "xstate";
 const fastingMachine = Machine(
   {
     id: "fastingScreen",
-    initial: "notFasting",
-    context: { startTime: null },
+    initial: "isFasting",
+    context: {
+      startTime: null,
+      isVisibleAtStart: true
+    },
     states: {
+      isFasting: {
+        on: {
+          "": [
+            { target: "notFasting", cond: () => true },
+            { target: "fasting", cond: () => false }
+          ]
+        }
+      },
       notFasting: {
-        on: { START_FAST: "fasting" }
+        on: {
+          START_FAST: {
+            target: "fasting",
+            actions: ["saveStartTime"]
+          }
+        }
       },
       fasting: {
-        onEntry: ["saveStartTime"],
-        onExit: ["saveFast"],
-        activities: ["visibility"],
+        onEntry: ["checkVisibility"],
+        onExit: ["saveFast", "cleanStartTime"],
         on: { END_FAST: "congratulations" },
-        initial: "visible",
+        initial: "checkVisible",
         states: {
           checkVisible: {
             on: {
               "": [
                 {
                   target: "visible",
-                  cond: c => c.isVisible
+                  cond: c => c.isVisibleAtStart
                 },
                 {
                   target: "notVisible",
-                  cond: c => !c.isVisible
+                  cond: c => !c.isVisibleAtStart
                 }
               ]
             }
@@ -56,7 +71,10 @@ const fastingMachine = Machine(
   },
   {
     actions: {
-      saveStartTime: actions.assign({ startTime: new Date() }),
+      checkVisibility: actions.assign({
+        isVisibleAtStart: () => !document.hidden
+      }),
+      saveStartTime: actions.assign({ startTime: () => new Date() }),
       saveFast: function(ctx) {
         console.log(
           "Fasting saved! Started at " +
@@ -64,7 +82,8 @@ const fastingMachine = Machine(
             " and finished at " +
             new Date()
         );
-      }
+      },
+      cleanStartTime: actions.assign({ startTime: null })
     },
     activities: {
       timer: function(ctx) {
